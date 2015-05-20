@@ -1,0 +1,8 @@
+package com.example.amendes.firewallhospot;
+
+/**
+ * Created by amendes on 12/05/15.
+ */
+public enum WIFI_AP_STATE {
+    WIFI_AP_STATE_DISABLING, WIFI_AP_STATE_DISABLED, WIFI_AP_STATE_ENABLING, WIFI_AP_STATE_ENABLED, WIFI_AP_STATE_FAILED
+}

@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">FirewallHospot</string>
+
+    <string name="hello_world">Hello world!</string>
+    <string name="action_settings">Exit</string>
+    <string name="emptyValue" />
+    <string name="toast_bin_installed">toast_bin_installed</string>
+</resources>
