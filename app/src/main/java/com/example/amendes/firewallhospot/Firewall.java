@@ -187,7 +187,7 @@ public final class Firewall {
          * @param flag_all deny all traffic if true
          * @param showErrors indicates if errors should be alerted
          */
-        private static boolean applyIptablesRulesImpl(Context ctx, String ip_src, String ip_dst, String port_src, String port_dst
+        public static boolean applyIptablesRulesImpl(Context ctx, String ip_src, String ip_dst, String port_src, String port_dst
                 ,boolean flag_all, boolean fw_mode, boolean showErrors) {
             if (ctx == null) {
                 return false;
@@ -254,59 +254,59 @@ public final class Firewall {
 
                     if(flag_all) {
                         /* block any traffic for this ip source */
-                        if ((!ip_src.isEmpty()) && (ip_dst.isEmpty())) {
+                        if ((!ip_src.trim().equals("")) && (ip_dst.trim().equals(""))) {
                             script.append("$IPTABLES -A firewall-wifi ").append("-s ").append(ip_src + " -j DROP || exit\n");
                         }
 
                         /* block any traffic for this ip dest */
-                        if ((ip_src.isEmpty()) && (!ip_dst.isEmpty())) {
+                        if ((ip_src.trim().equals("")) && (!ip_dst.trim().equals(""))) {
                             script.append("$IPTABLES -A firewall-wifi ").append("-s ").append(ip_dst + " -j DROP || exit\n");
                         }
                     } else { // Casos de aplicacao de regras no iptables
 
                         //Aplicando os parametros setados de acordo com a especifidade
 
-                        if(!ip_src.isEmpty() && !ip_dst.isEmpty() && !port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src).append(" -s ").append(ip_src)
                                     .append(" --dport ").append(port_dst).append(" -d ").append(ip_dst).append(" -j DROP || exit\n");
                         }
 
 
-                        if(ip_src.isEmpty() && !ip_dst.isEmpty() && !port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src)
                                     .append(" --dport ").append(port_dst).append(" -d ").append(ip_dst).append(" -j DROP || exit\n");
                         }
 
-                        if(ip_src.isEmpty() && !ip_dst.isEmpty() && port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append(" --dport ").append(port_dst)
                                     .append(" -d ").append(ip_dst).append(" -j DROP || exit\n");
                         }
 
-                        if(ip_src.isEmpty() && ip_dst.isEmpty() && port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append(" --dport ").append(port_dst).append(" -j DROP || exit\n");
                         }
 
-                        if(ip_src.isEmpty() && !ip_dst.isEmpty() && port_src.isEmpty() && port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append(" -d ").append(ip_dst).append(" -j DROP || exit\n");
                         }
 
 
 
-                        if(!ip_src.isEmpty() && ip_dst.isEmpty() && !port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src).append(" -s ").append(ip_src)
                                     .append(" --dport ").append(port_dst).append(" -j DROP || exit\n");
                         }
 
-                        if(!ip_src.isEmpty() && ip_dst.isEmpty() && !port_src.isEmpty() && port_dst.isEmpty()){
+                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src).append(" -s ").append(ip_src)
                                     .append(" -j DROP || exit\n");
                         }
 
-                        if(ip_src.isEmpty() && ip_dst.isEmpty() && !port_src.isEmpty() && port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src).append(" -j DROP || exit\n");
                         }
 
-                        if(!ip_src.isEmpty() && ip_dst.isEmpty() && port_src.isEmpty() && port_dst.isEmpty()){
+                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append(" -s ").append(ip_src)
                                     .append(" -j DROP || exit\n");
                         }
@@ -320,59 +320,59 @@ public final class Firewall {
 
                     if(flag_all) {
                         /* block any traffic for this ip source */
-                        if ((!ip_src.isEmpty()) && (ip_dst.isEmpty())) {
+                        if ((!ip_src.trim().equals("")) && (ip_dst.trim().equals(""))) {
                             script.append("$IPTABLES -A firewall-wifi ").append("-s ").append(ip_src + " -j ACCEPT || exit\n");
                         }
 
                         /* block any traffic for this ip dest */
-                        if ((ip_src.isEmpty()) && (!ip_dst.isEmpty())) {
+                        if ((ip_src.trim().equals("")) && (!ip_dst.trim().equals(""))) {
                             script.append("$IPTABLES -A firewall-wifi ").append("-s ").append(ip_dst + " -j ACCEPT || exit\n");
                         }
                     } else { // Casos de aplicacao de regras no iptables
 
                         //Aplicando os parametros setados de acordo com a especifidade
 
-                        if(!ip_src.isEmpty() && !ip_dst.isEmpty() && !port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src).append(" -s ").append(ip_src)
                                     .append(" --dport ").append(port_dst).append(" -d ").append(ip_dst).append(" -j ACCEPT || exit\n");
                         }
 
 
-                        if(ip_src.isEmpty() && !ip_dst.isEmpty() && !port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src)
                                     .append(" --dport ").append(port_dst).append(" -d ").append(ip_dst).append(" -j ACCEPT || exit\n");
                         }
 
-                        if(ip_src.isEmpty() && !ip_dst.isEmpty() && port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append(" --dport ").append(port_dst)
                                     .append(" -d ").append(ip_dst).append(" -j ACCEPT || exit\n");
                         }
 
-                        if(ip_src.isEmpty() && ip_dst.isEmpty() && port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append(" --dport ").append(port_dst).append(" -j ACCEPT || exit\n");
                         }
 
-                        if(ip_src.isEmpty() && !ip_dst.isEmpty() && port_src.isEmpty() && port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append(" -d ").append(ip_dst).append(" -j ACCEPT|| exit\n");
                         }
 
 
 
-                        if(!ip_src.isEmpty() && ip_dst.isEmpty() && !port_src.isEmpty() && !port_dst.isEmpty()){
+                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src).append(" -s ").append(ip_src)
                                     .append(" --dport ").append(port_dst).append(" -j ACCEPT || exit\n");
                         }
 
-                        if(!ip_src.isEmpty() && ip_dst.isEmpty() && !port_src.isEmpty() && port_dst.isEmpty()){
+                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src).append(" -s ").append(ip_src)
                                     .append(" -j ACCEPT || exit\n");
                         }
 
-                        if(ip_src.isEmpty() && ip_dst.isEmpty() && !port_src.isEmpty() && port_dst.isEmpty()){
+                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append("--sport ").append(port_src).append(" -j ACCEPT || exit\n");
                         }
 
-                        if(!ip_src.isEmpty() && ip_dst.isEmpty() && port_src.isEmpty() && port_dst.isEmpty()){
+                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
                             script.append("$IPTABLES -A firewall-wifi ").append(" -s ").append(ip_src)
                                     .append(" -j ACCEPT || exit\n");
                         }
@@ -418,7 +418,7 @@ public final class Firewall {
                 final StringTokenizer tok = new StringTokenizer(savedUids_wifi, "|");
                 while (tok.hasMoreTokens()) {
                     final String uid = tok.nextToken();
-                    if (!uid.equals("")) {
+                    if (!uid.trim().equals("")) {
                         try {
                             uids_wifi.add(Integer.parseInt(uid));
                         } catch (Exception ex) {
@@ -432,7 +432,7 @@ public final class Firewall {
                 final StringTokenizer tok = new StringTokenizer(savedUids_3g, "|");
                 while (tok.hasMoreTokens()) {
                     final String uid = tok.nextToken();
-                    if (!uid.equals("")) {
+                    if (!uid.trim().equals("")) {
                         try {
                             uids_3g.add(Integer.parseInt(uid));
                         } catch (Exception ex) {
@@ -680,7 +680,7 @@ public final class Firewall {
                 selected_wifi = new int[tok.countTokens()];
                 for (int i=0; i<selected_wifi.length; i++) {
                     final String uid = tok.nextToken();
-                    if (!uid.equals("")) {
+                    if (!uid.trim().equals("")) {
                         try {
                             selected_wifi[i] = Integer.parseInt(uid);
                         } catch (Exception ex) {
@@ -697,7 +697,7 @@ public final class Firewall {
                 selected_3g = new int[tok.countTokens()];
                 for (int i=0; i<selected_3g.length; i++) {
                     final String uid = tok.nextToken();
-                    if (!uid.equals("")) {
+                    if (!uid.trim().equals("")) {
                         try {
                             selected_3g[i] = Integer.parseInt(uid);
                         } catch (Exception ex) {

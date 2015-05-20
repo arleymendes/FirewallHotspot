@@ -289,4 +289,30 @@ public class MainActivity extends ActionBarActivity {
         }
     }
 
+    public void onClickFwApply(View fw){
+
+        if (fw.getId() == R.id.TFButtonFw){
+
+            EditText origem = (EditText)findViewById(R.id.TFFwSrc);
+            EditText prtorigem = (EditText)findViewById(R.id.TFFwPtSrc);
+            EditText destino = (EditText)findViewById(R.id.TFFwDst);
+            EditText prtdestino = (EditText)findViewById(R.id.TFFwPtDst);
+            CheckBox denyall = (CheckBox)findViewById(R.id.TFFwChkDenyall);
+
+            String src = origem.getText().toString();
+            String prtsrc = prtorigem.getText().toString();
+            String dst = destino.getText().toString();
+            String prtdst = prtdestino.getText().toString();
+            Boolean deny = denyall.isChecked();
+
+            if(Firewall.applyIptablesRulesImpl(MainActivity.this,src,prtsrc,dst,prtdst,deny,true,true)){
+                Toast.makeText(MainActivity.this, "Regra aplicada com sucesso", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(MainActivity.this, "Falha na aplicação da regra", Toast.LENGTH_SHORT).show();
+            }
+
+        }
+
+    }
+
 }
