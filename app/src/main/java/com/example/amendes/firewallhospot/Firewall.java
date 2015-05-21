@@ -82,8 +82,6 @@ public final class Firewall {
         //public static final String MODE_BLACKLIST = "blacklist";
         // Messages
         public static final String STATUS_CHANGED_MSG   = "com.googlecode.firewall.intent.action.STATUS_CHANGED";
-        //public static final String TOGGLE_REQUEST_MSG   = "com.googlecode.firewall.intent.action.TOGGLE_REQUEST";
-        //public static final String CUSTOM_SCRIPT_MSG    = "com.googlecode.firewall.intent.action.CUSTOM_SCRIPT";
         // Message extras (parameters)
         public static final String STATUS_EXTRA                 = "com.googlecode.firewall.intent.extra.STATUS";
         //public static final String SCRIPT_EXTRA                 = "com.googlecode.firewall.intent.extra.SCRIPT";
