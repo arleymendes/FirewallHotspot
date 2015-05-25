@@ -305,7 +305,7 @@ public class MainActivity extends ActionBarActivity {
             String prtdst = prtdestino.getText().toString();
             Boolean deny = denyall.isChecked();
 
-            if(Firewall.applyIptablesRulesImpl(MainActivity.this,src,prtsrc,dst,prtdst,deny,true,true)){
+            if(Firewall.applyIptablesRulesImpl(MainActivity.this,src,dst,prtsrc,prtdst,deny,true,true)){
                 Toast.makeText(MainActivity.this, "Regra aplicada com sucesso", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(MainActivity.this, "Falha na aplicação da regra", Toast.LENGTH_SHORT).show();

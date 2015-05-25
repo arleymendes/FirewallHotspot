@@ -378,6 +378,7 @@ public final class Firewall {
 
                 }
                 final StringBuilder res = new StringBuilder();
+                //code = runScriptAsRoot(ctx, script.toString(), res);
                 code = runScriptAsRoot(ctx, script.toString(), res);
                 if (showErrors && code != 0) {
                     String msg = res.toString();
