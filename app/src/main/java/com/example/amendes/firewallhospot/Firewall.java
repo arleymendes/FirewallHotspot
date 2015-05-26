@@ -58,34 +58,29 @@ public final class Firewall {
      */
 
       
-        /** application version string */
-        public static final String VERSION = "1.5.4";
-        /** special application UID used to indicate "any application" */
-        public static final int SPECIAL_UID_ANY = -10;
-        /** special application UID used to indicate the Linux Kernel */
-        public static final int SPECIAL_UID_KERNEL      = -11;
+
         /** root script filename */
         private static final String SCRIPT_FILE = "firewall.sh";
 
         // Preferences
         public static final String PREFS_NAME                   = "firewallPrefs";
-        //public static final String PREF_3G_UIDS                 = "AllowedUids3G";
-        //public static final String PREF_WIFI_UIDS               = "AllowedUidsWifi";
-        //public static final String PREF_PASSWORD                = "Password";
+
         public static final String PREF_CUSTOMSCRIPT    = "CustomScript";
         public static final String PREF_CUSTOMSCRIPT2   = "CustomScript2"; // Executed on shutdown
         public static final String PREF_MODE                    = "BlockMode";
         public static final String PREF_ENABLED                 = "Enabled";
         public static final String PREF_LOGENABLED              = "LogEnabled";
+
         // Modes
-       // public static final String MODE_WHITELIST = "whitelist";
-        //public static final String MODE_BLACKLIST = "blacklist";
+
+        public static final String MODE_WHITELIST = "whitelist";
+        public static final String MODE_BLACKLIST = "blacklist";
+
         // Messages
         public static final String STATUS_CHANGED_MSG   = "com.googlecode.firewall.intent.action.STATUS_CHANGED";
         // Message extras (parameters)
         public static final String STATUS_EXTRA                 = "com.googlecode.firewall.intent.extra.STATUS";
-        //public static final String SCRIPT_EXTRA                 = "com.googlecode.firewall.intent.extra.SCRIPT";
-        //public static final String SCRIPT2_EXTRA                = "com.googlecode.firewall.intent.extra.SCRIPT2";
+
 
         // Cached applications
         // public static DroidApp applications[] = null;
@@ -119,7 +114,7 @@ public final class Firewall {
                     "BUSYBOX=busybox\n" +
                     "GREP=grep\n" +
                     "ECHO=echo\n" + "";
-            /*
+                    /*
                     "# Try to find busybox\n" +
                     "if " + dir + "/busybox_g1 --help >/dev/null 2>/dev/null ; then\n" +
                     "       BUSYBOX="+dir+"/busybox_g1\n" +
@@ -149,6 +144,7 @@ public final class Firewall {
                     "fi\n" +
                     "";
                     */
+
         }
 
         /**
@@ -194,11 +190,9 @@ public final class Firewall {
             }
             assertBinaries(ctx, showErrors);
             final String ITFS_WIFI[] = {"tiwlan+", "wlan+", "eth+", "ra+"};
-            final SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, 0);
             final boolean whitelist = fw_mode;
-            final boolean blacklist = !whitelist;
-            final boolean logenabled = ctx.getSharedPreferences(PREFS_NAME, 0).getBoolean(PREF_LOGENABLED, false);
-            final String customScript = ctx.getSharedPreferences(Firewall.PREFS_NAME, 0).getString(Firewall.PREF_CUSTOMSCRIPT, "");
+            final boolean logenabled = true;
+            final String customScript = "";
 
             final StringBuilder script = new StringBuilder();
             try {
@@ -210,18 +204,18 @@ public final class Firewall {
                         "$IPTABLES -L firewall >/dev/null 2>/dev/null || $IPTABLES --new firewall || exit 2\n" +
                         "$IPTABLES -L firewall-wifi >/dev/null 2>/dev/null || $IPTABLES --new firewall-wifi || exit 3\n" +
                         "$IPTABLES -L firewall-reject >/dev/null 2>/dev/null || $IPTABLES --new firewall-reject || exit 4\n" +
-                        "# Add firewall chain to OUTPUT chain if necessary\n" +
-                        "$IPTABLES -L OUTPUT | $GREP -q firewall || $IPTABLES -A OUTPUT -j firewall || exit 5\n" +
+                        "# Add firewall chain to FORWARD chain if necessary\n" +
+                        "$IPTABLES -L FORWARD | $GREP -q firewall || $IPTABLES -A FORWARD -j firewall || exit 5\n" +
                         "# Flush existing rules\n" +
-                        "$IPTABLES -F firewall || exit 6\n" +
-                        "$IPTABLES -F firewall-wifi || exit 7\n" +
-                        "$IPTABLES -F firewall-reject || exit 8\n" +
+                        //"$IPTABLES -F firewall || exit 6\n" +
+                        //"$IPTABLES -F firewall-wifi || exit 7\n" +
+                        //"$IPTABLES -F firewall-reject || exit 8\n" +
                         "");
                 // Check if logging is enabled
                 if (logenabled) {
                     script.append("" +
                             "# Create the log and reject rules (ignore errors on the LOG target just in case it is not available)\n" +
-                            "$IPTABLES -A firewall-reject -j LOG --log-prefix \"[firewall] \" --log-uid\n" +
+                            "$IPTABLES -A firewall-reject -j LOG --log-prefix \"[firewall] \"\n" +
                             "$IPTABLES -A firewall-reject -j REJECT || exit 9\n" +
                             "");
                 } else {
@@ -242,11 +236,10 @@ public final class Firewall {
                 script.append("# Main rules (per interface)\n");
 
                 for (final String itf : ITFS_WIFI) {
-                    script.append("$IPTABLES -A firewall -o ").append(itf).append(" -j firewall-wifi || exit\n");
+                    script.append("$IPTABLES -A firewall -i ").append(itf).append(" -j firewall-wifi || exit\n");
                 }
 
                 script.append("# Filtering rules\n");
-                //final String targetRule = (flag_all ? "DROP" : "RETURN");
 
                 if (whitelist) {
 
@@ -388,12 +381,9 @@ public final class Firewall {
                             return false;
                         }
 
-                        script.append("$IPTABLES -A firewall-wifi -j ACCEPT || exit\n");
                     }
 
                 } else {
-
-                    //script.append("$IPTABLES -A firewall-wifi -j ACCEPT|| exit\n");
 
                     if(flag_all) {
                         /* block any traffic for this ip source */
@@ -407,7 +397,11 @@ public final class Firewall {
                             script.append("$IPTABLES -A firewall-wifi ")
                                     .append("-s ").append(ip_dst + " -j ACCEPT || exit\n");
                         }
-                    } else { // Casos de aplicacao de regras no iptables
+                    } else { // Tornando o firewall em blacklist
+
+                        script.append("$IPTABLES -P INPUT DROP");
+                        script.append("$IPTABLES -P FORWARD DROP");
+                        script.append("$IPTABLES -P OUTPUT DROP");
 
                         // Regra cheia
 
@@ -553,98 +547,6 @@ public final class Firewall {
             }
             return false;
         }
-        /**
-         * Purge and re-add all saved rules (not in-memory ones).
-         * This is much faster than just calling "applyIptablesRules", since it don't need to read installed applications.
-         * @param ctx application context (mandatory)
-         * @param showErrors indicates if errors should be alerted
-         */
-
-        /*
-        public static boolean applySavedIptablesRules(Context ctx, boolean showErrors) {
-            if (ctx == null) {
-                return false;
-            }
-            final SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, 0);
-            final String savedUids_wifi = prefs.getString(PREF_WIFI_UIDS, "");
-            final String savedUids_3g = prefs.getString(PREF_3G_UIDS, "");
-            final List<Integer> uids_wifi = new LinkedList<Integer>();
-            if (savedUids_wifi.length() > 0) {
-                // Check which applications are allowed on wifi
-                final StringTokenizer tok = new StringTokenizer(savedUids_wifi, "|");
-                while (tok.hasMoreTokens()) {
-                    final String uid = tok.nextToken();
-                    if (!uid.trim().equals("")) {
-                        try {
-                            uids_wifi.add(Integer.parseInt(uid));
-                        } catch (Exception ex) {
-                        }
-                    }
-                }
-            }
-            final List<Integer> uids_3g = new LinkedList<Integer>();
-            if (savedUids_3g.length() > 0) {
-                // Check which applications are allowed on 2G/3G
-                final StringTokenizer tok = new StringTokenizer(savedUids_3g, "|");
-                while (tok.hasMoreTokens()) {
-                    final String uid = tok.nextToken();
-                    if (!uid.trim().equals("")) {
-                        try {
-                            uids_3g.add(Integer.parseInt(uid));
-                        } catch (Exception ex) {
-                        }
-                    }
-                }
-            }
-            return applyIptablesRulesImpl(ctx, uids_wifi, showErrors);
-        }
-        */
-
-        /**
-         * Purge and re-add all rules.
-         * @param ctx application context (mandatory)
-         * @param showErrors indicates if errors should be alerted
-         */
-
-        /*
-        public static boolean applyIptablesRules(Context ctx, boolean showErrors) {
-            if (ctx == null) {
-                return false;
-            }
-            saveRules(ctx);
-            return applySavedIptablesRules(ctx, showErrors);
-        }
-        */
-
-        /**
-         * Save current rules using the preferences storage.
-         * @param ctx application context (mandatory)
-         */
-
-        /*
-        public static void saveRules(Context ctx) {
-            final SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, 0);
-            final DroidApp[] apps = getApps(ctx);
-            // Builds a pipe-separated list of names
-            final StringBuilder newuids_wifi = new StringBuilder();
-            final StringBuilder newuids_3g = new StringBuilder();
-            for (int i=0; i<apps.length; i++) {
-                if (apps[i].selected_wifi) {
-                    if (newuids_wifi.length() != 0) newuids_wifi.append('|');
-                    newuids_wifi.append(apps[i].uid);
-                }
-                if (apps[i].selected_3g) {
-                    if (newuids_3g.length() != 0) newuids_3g.append('|');
-                    newuids_3g.append(apps[i].uid);
-                }
-            }
-            // save the new list of UIDs
-            final Editor edit = prefs.edit();
-            edit.putString(PREF_WIFI_UIDS, newuids_wifi.toString());
-            edit.putString(PREF_3G_UIDS, newuids_3g.toString());
-            edit.commit();
-        }
-        */
 
         /**
          * Purge all iptables rules.
@@ -661,6 +563,7 @@ public final class Firewall {
                 final StringBuilder script = new StringBuilder();
                 script.append(scriptHeader(ctx));
                 script.append("" +
+                        "$IPTABLES -D FORWARD -j firewall\n" +
                         "$IPTABLES -F firewall\n" +
                         "$IPTABLES -F firewall-reject\n" +
                         "$IPTABLES -F firewall-wifi\n" +
@@ -814,141 +717,6 @@ public final class Firewall {
         }
 
         /**
-         * @param ctx application context (mandatory)
-         * @return a list of applications
-        */
-
-        /**
-        public static DroidApp[] getApps(Context ctx) {
-            if (applications != null) {
-                // return cached instance
-                return applications;
-            }
-            final SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, 0);
-            // allowed application names separated by pipe '|' (persisted)
-            final String savedUids_wifi = prefs.getString(PREF_WIFI_UIDS, "");
-            final String savedUids_3g = prefs.getString(PREF_3G_UIDS, "");
-            int selected_wifi[] = new int[0];
-            int selected_3g[] = new int[0];
-            if (savedUids_wifi.length() > 0) {
-                // Check which applications are allowed
-                final StringTokenizer tok = new StringTokenizer(savedUids_wifi, "|");
-                selected_wifi = new int[tok.countTokens()];
-                for (int i=0; i<selected_wifi.length; i++) {
-                    final String uid = tok.nextToken();
-                    if (!uid.trim().equals("")) {
-                        try {
-                            selected_wifi[i] = Integer.parseInt(uid);
-                        } catch (Exception ex) {
-                            selected_wifi[i] = -1;
-                        }
-                    }
-                }
-                // Sort the array to allow using "Arrays.binarySearch" later
-                Arrays.sort(selected_wifi);
-            }
-            if (savedUids_3g.length() > 0) {
-                // Check which applications are allowed
-                final StringTokenizer tok = new StringTokenizer(savedUids_3g, "|");
-                selected_3g = new int[tok.countTokens()];
-                for (int i=0; i<selected_3g.length; i++) {
-                    final String uid = tok.nextToken();
-                    if (!uid.trim().equals("")) {
-                        try {
-                            selected_3g[i] = Integer.parseInt(uid);
-                        } catch (Exception ex) {
-                            selected_3g[i] = -1;
-                        }
-                    }
-                }
-                // Sort the array to allow using "Arrays.binarySearch" later
-                Arrays.sort(selected_3g);
-            }
-            try {
-                final PackageManager pkgmanager = ctx.getPackageManager();
-                final List<ApplicationInfo> installed = pkgmanager.getInstalledApplications(0);
-                final HashMap<Integer, DroidApp> map = new HashMap<Integer, DroidApp>();
-                final Editor edit = prefs.edit();
-                boolean changed = false;
-                String name = null;
-                String cachekey = null;
-                DroidApp app = null;
-                for (final ApplicationInfo apinfo : installed) {
-                    boolean firstseem = false;
-                    app = map.get(apinfo.uid);
-                    // filter applications which are not allowed to access the Internet
-                    if (app == null && PackageManager.PERMISSION_GRANTED != pkgmanager.checkPermission(Manifest.permission.INTERNET, apinfo.packageName)) {
-                        continue;
-                    }
-                    // try to get the application label from our cache - getApplicationLabel() is horribly slow!!!!
-                    cachekey = "cache.label."+apinfo.packageName;
-                    name = prefs.getString(cachekey, "");
-                    if (name.length() == 0) {
-                        // get label and put on cache
-                        name = pkgmanager.getApplicationLabel(apinfo).toString();
-                        edit.putString(cachekey, name);
-                        changed = true;
-                        firstseem = true;
-                    }
-                    if (app == null) {
-                        app = new DroidApp();
-                        app.uid = apinfo.uid;
-                        app.names = new String[] { name };
-                        app.icon = pkgmanager.getApplicationIcon(apinfo);
-                        map.put(apinfo.uid, app);
-                    } else {
-                        final String newnames[] = new String[app.names.length + 1];
-                        System.arraycopy(app.names, 0, newnames, 0, app.names.length);
-                        newnames[app.names.length] = name;
-                        app.names = newnames;
-                    }
-                    app.firstseem = firstseem;
-                    // check if this application is selected
-                    if (!app.selected_wifi && Arrays.binarySearch(selected_wifi, app.uid) >= 0) {
-                        app.selected_wifi = true;
-                    }
-                    if (!app.selected_3g && Arrays.binarySearch(selected_3g, app.uid) >= 0) {
-                        app.selected_3g = true;
-                    }
-                }
-                if (changed) {
-                    edit.commit();
-                }
-                        //add special applications to the list
-                final DroidApp special[] = {
-                        new DroidApp(SPECIAL_UID_ANY,"(Any application) - Same as selecting all applications", false, false),
-                        new DroidApp(SPECIAL_UID_KERNEL,"(Kernel) - Linux kernel", false, false),
-                        new DroidApp(android.os.Process.getUidForName("root"), "(root) - Applications running as root", false, false),
-                        new DroidApp(android.os.Process.getUidForName("media"), "Media server", false, false),
-                        new DroidApp(android.os.Process.getUidForName("vpn"), "VPN networking", false, false),
-                        new DroidApp(android.os.Process.getUidForName("shell"), "Linux shell", false, false),
-                        new DroidApp(android.os.Process.getUidForName("gps"), "GPS", false, false),
-                };
-                for (int i=0; i<special.length; i++) {
-                    app = special[i];
-                    if (app.uid != -1 && !map.containsKey(app.uid)) {
-                        // check if this application is allowed
-                        if (Arrays.binarySearch(selected_wifi, app.uid) >= 0) {
-                            app.selected_wifi = true;
-                        }
-                        if (Arrays.binarySearch(selected_3g, app.uid) >= 0) {
-                            app.selected_3g = true;
-                        }
-                        map.put(app.uid, app);
-                    }
-                }
-                        //convert the map into an array
-                applications = map.values().toArray(new DroidApp[map.size()]);;
-                return applications;
-            } catch (Exception e) {
-                alert(ctx, "error: " + e);
-            }
-            return null;
-        }
-
-        */
-
-        /**
          * Check if we have root access
          * @param ctx mandatory context
          * @param showErrors indicates if errors should be alerted
@@ -1098,117 +866,6 @@ public final class Firewall {
             message.putExtra(Firewall.STATUS_EXTRA, enabled);
             ctx.sendBroadcast(message);
         }
-
-
-        /**
-         * Called when an application in removed (un-installed) from the system.
-         * This will look for that application in the selected list and update the persisted values if necessary
-         * @param ctx mandatory app context
-         * @param uid UID of the application that has been removed         *
-         */
-        /*
-        public static void applicationRemoved(Context ctx, int uid) {
-            final SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, 0);
-            final Editor editor = prefs.edit();
-            // allowed application names separated by pipe '|' (persisted)
-            final String savedUids_wifi = prefs.getString(PREF_WIFI_UIDS, "");
-            final String savedUids_3g = prefs.getString(PREF_3G_UIDS, "");
-            final String uid_str = uid + "";
-            boolean changed = false;
-            // look for the removed application in the "wi-fi" list
-            if (savedUids_wifi.length() > 0) {
-                final StringBuilder newuids = new StringBuilder();
-                final StringTokenizer tok = new StringTokenizer(savedUids_wifi, "|");
-                while (tok.hasMoreTokens()) {
-                    final String token = tok.nextToken();
-                    if (uid_str.equals(token)) {
-                        Log.d("firewall", "Removing UID " + token + " from the wi-fi list (package removed)!");
-                        changed = true;
-                    } else {
-                        if (newuids.length() > 0) newuids.append('|');
-                        newuids.append(token);
-                    }
-                }
-                if (changed) {
-                    editor.putString(PREF_WIFI_UIDS, newuids.toString());
-                }
-            }
-            // look for the removed application in the "3g" list
-            if (savedUids_3g.length() > 0) {
-                final StringBuilder newuids = new StringBuilder();
-                final StringTokenizer tok = new StringTokenizer(savedUids_3g, "|");
-                while (tok.hasMoreTokens()) {
-                    final String token = tok.nextToken();
-                    if (uid_str.equals(token)) {
-                        Log.d("firewall", "Removing UID " + token + " from the 3G list (package removed)!");
-                        changed = true;
-                    } else {
-                        if (newuids.length() > 0) newuids.append('|');
-                        newuids.append(token);
-                    }
-                }
-                if (changed) {
-                    editor.putString(PREF_3G_UIDS, newuids.toString());
-                }
-            }
-            // if anything has changed, save the new prefs...
-            if (changed) {
-                editor.commit();
-                if (isEnabled(ctx)) {
-                    // .. and also re-apply the rules if the firewall is enabled
-                    applySavedIptablesRules(ctx, false);
-                }
-            }
-        }
-        */
-
-        /**
-         * Small structure to hold an application info
-         */
-        /*
-        public static final class DroidApp {
-            // linux user id
-            int uid;
-            // application names belonging to this user id /
-            String names[];
-            // indicates if this application is selected for wifi
-            boolean selected_wifi;
-            // indicates if this application is selected for 3g
-            boolean selected_3g;
-            // toString cache
-            String tostr;
-            // application icon
-            Drawable icon;
-            // first time seem?
-            boolean firstseem;
-
-            public DroidApp() {
-            }
-            public DroidApp(int uid, String name, boolean selected_wifi, boolean selected_3g) {
-                this.uid = uid;
-                this.names = new String[] {name};
-                this.selected_wifi = selected_wifi;
-                this.selected_3g = selected_3g;
-            }
-
-             //Screen representation of this application
-
-            @Override
-            public String toString() {
-                if (tostr == null) {
-                    final StringBuilder s = new StringBuilder();
-                    //if (uid > 0) s.append(uid + ": ");
-                    for (int i=0; i<names.length; i++) {
-                        if (i != 0) s.append(", ");
-                        s.append(names[i]);
-                    }
-                    s.append("\n");
-                    tostr = s.toString();
-                }
-                return tostr;
-            }
-        }
-        */
 
         /**
          * Small internal structure used to hold log information

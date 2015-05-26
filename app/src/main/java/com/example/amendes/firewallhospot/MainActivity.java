@@ -109,7 +109,6 @@ public class MainActivity extends ActionBarActivity {
             tg1.setChecked(true);
             this.displayCurrentWifiConfig();
         }
-
         scan();
     }
 
@@ -130,6 +129,7 @@ public class MainActivity extends ActionBarActivity {
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
+            Firewall.purgeIptables(MainActivity.this,true);
             MainActivity.this.finish();
             return true;
         }
@@ -313,6 +313,12 @@ public class MainActivity extends ActionBarActivity {
 
         }
 
+    }
+
+    public void onClickShowRules(View rules){
+        if(rules.getId() == R.id.TFBtnShowRules){
+            Firewall.showIptablesRules(MainActivity.this);
+        }
     }
 
 }
