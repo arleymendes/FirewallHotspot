@@ -7,20 +7,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.StringReader;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.StringTokenizer;
-import android.Manifest;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
-import android.graphics.drawable.Drawable;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -61,15 +53,13 @@ public final class Firewall {
 
         /** root script filename */
         private static final String SCRIPT_FILE = "firewall.sh";
+        private static StringBuilder script = new StringBuilder();
 
         // Preferences
         public static final String PREFS_NAME                   = "firewallPrefs";
-
-        public static final String PREF_CUSTOMSCRIPT    = "CustomScript";
-        public static final String PREF_CUSTOMSCRIPT2   = "CustomScript2"; // Executed on shutdown
-        public static final String PREF_MODE                    = "BlockMode";
         public static final String PREF_ENABLED                 = "Enabled";
         public static final String PREF_LOGENABLED              = "LogEnabled";
+
 
         // Modes
 
@@ -86,6 +76,9 @@ public final class Firewall {
         // public static DroidApp applications[] = null;
         // Do we have root access?
         private static boolean hasroot = false;
+
+        // Cabecalho executado ?
+        private static boolean flag_header = true;
 
         /**
          * Display a simple alert box
@@ -106,15 +99,81 @@ public final class Firewall {
          * @param ctx context
          * @return script header
          */
-        private static String scriptHeader(Context ctx) {
+        private void scriptHeader(Context ctx,boolean logenabled, boolean whitelist,
+                                                  String customScript, boolean flag_header_full) {
+
             final String dir = ctx.getDir("bin",0).getAbsolutePath();
-            final String myiptables = dir + "/iptables_armv5";
+            final String ITFS_WIFI[] = {"tiwlan+", "wlan+", "eth+", "ra+"};
+
+            if(flag_header || !flag_header_full){
+
+                if (flag_header_full){
+                    script.append("" +
+                            "IPTABLES=iptables\n" +
+                            "BUSYBOX=busybox\n" +
+                            "GREP=grep\n" +
+                            "ECHO=echo\n");
+                    script.append("" +
+                            "$IPTABLES --version || exit 1\n" +
+                            "# Create the firewall chains if necessary\n" +
+                            "$IPTABLES -L firewall >/dev/null 2>/dev/null || $IPTABLES --new firewall || exit 2\n" +
+                            "$IPTABLES -L firewall-wifi >/dev/null 2>/dev/null || $IPTABLES --new firewall-wifi || exit 3\n" +
+                            "$IPTABLES -L firewall-reject >/dev/null 2>/dev/null || $IPTABLES --new firewall-reject || exit 4\n" +
+                            "# Add firewall chain to FORWARD chain if necessary\n" +
+                            "$IPTABLES -L FORWARD | $GREP -q firewall || $IPTABLES -A FORWARD -j firewall || exit 5\n" +
+                            "# Flush existing rules\n" +
+                            "");
+                    // Check if logging is enabled
+                    if (logenabled) {
+                        script.append("" +
+                                "# Create the log and reject rules (ignore errors on the LOG target just in case it is not available)\n" +
+                                "$IPTABLES -A firewall-reject -j LOG --log-prefix \"[firewall] \"\n" +
+                                "$IPTABLES -A firewall-reject -j REJECT || exit 9\n" +
+                                "");
+                    } else {
+                        script.append("" +
+                                "# Create the reject rule (log disabled)\n" +
+                                "$IPTABLES -A firewall-reject -j REJECT || exit 10\n" +
+                                "");
+                    }
+                    if (customScript.length() > 0) {
+                        script.append("\n# BEGIN OF CUSTOM SCRIPT (user-defined)\n");
+                        script.append(customScript);
+                        script.append("\n# END OF CUSTOM SCRIPT (user-defined)\n\n");
+                    }
+                    if (whitelist && logenabled) {
+                        script.append("# Allow DNS lookups on white-list for a better logging (ignore errors)\n");
+                        script.append("$IPTABLES -A firewall -p udp --dport 53 -j RETURN\n");
+                    }
+                    script.append("# Main rules (per interface)\n");
+
+                    for (final String itf : ITFS_WIFI) {
+                        script.append("$IPTABLES -A firewall -i ").append(itf).append(" -j firewall-wifi || exit\n");
+                    }
+
+                    script.append("# Filtering rules\n");
+
+                    flag_header = false;
+
+                } else {
+
+                    script.append("" +
+                            "IPTABLES=iptables\n" +
+                            "BUSYBOX=busybox\n" +
+                            "GREP=grep\n" +
+                            "ECHO=echo\n");
+
+                }
+
+            }
+
+            /*
             return "" +
                     "IPTABLES=iptables\n" +
                     "BUSYBOX=busybox\n" +
                     "GREP=grep\n" +
                     "ECHO=echo\n" + "";
-                    /*
+
                     "# Try to find busybox\n" +
                     "if " + dir + "/busybox_g1 --help >/dev/null 2>/dev/null ; then\n" +
                     "       BUSYBOX="+dir+"/busybox_g1\n" +
@@ -145,6 +204,8 @@ public final class Firewall {
                     "";
                     */
 
+
+
         }
 
         /**
@@ -173,6 +234,290 @@ public final class Firewall {
             Runtime.getRuntime().exec("chmod "+mode+" "+abspath).waitFor();
         }
 
+        public void setCustomRules(Context ctx, boolean whitelist, String ip_src, String ip_dst,
+                                   String port_src, String port_dst, boolean flag_all) {
+            if (whitelist) {
+
+                if (flag_all) {
+                        /* block any traffic for this ip source */
+                    if ((!ip_src.trim().equals("")) && (ip_dst.trim().equals(""))) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-s ").append(ip_src + " -j DROP || exit\n");
+                    }
+
+                        /* block any traffic for this ip dest */
+                    if ((ip_src.trim().equals("")) && (!ip_dst.trim().equals(""))) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-s ").append(ip_dst + " -j DROP || exit\n");
+                    }
+                } else { // Casos de aplicacao de regras no iptables
+
+                    // Regra cheia
+
+                    if (!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append("-s ").append(ip_src)
+                                .append(" --sport ").append(port_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    // Agora regras com destino
+
+                    if (!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append("-s ").append(ip_src)
+                                .append(" --sport ").append(port_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-s ").append(ip_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append(" -s ").append(ip_src)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" -s ").append(ip_src)
+                                .append(" --sport ").append(port_src)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" -s ").append(ip_src)
+                                .append(" --sport ").append(port_src)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" -s ").append(ip_src)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+
+                    // Agora regras com destino
+
+                    if (ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --sport ").append(port_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --sport ").append(port_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" -d ").append(ip_dst)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append(" -d ").append(ip_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    // Agora so com portas
+
+                    if (ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --sport ").append(port_src)
+                                .append(" -j DROP || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --sport ").append(port_src)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j DROP || exit\n");
+                    }
+
+
+
+                }
+
+            } else {
+
+                if (flag_all) {
+                        /* block any traffic for this ip source */
+                    if ((!ip_src.trim().equals("")) && (ip_dst.trim().equals(""))) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-s ").append(ip_src + " -j ACCEPT || exit\n");
+                    }
+
+                        /* block any traffic for this ip dest */
+                    if ((ip_src.trim().equals("")) && (!ip_dst.trim().equals(""))) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-s ").append(ip_dst + " -j ACCEPT || exit\n");
+                    }
+                } else { // Tornando o firewall em blacklist
+
+                    script.append("$IPTABLES -P INPUT DROP");
+                    script.append("$IPTABLES -P FORWARD DROP");
+                    script.append("$IPTABLES -P OUTPUT DROP");
+
+                    // Regra cheia
+
+                    if (!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append("-s ").append(ip_src)
+                                .append(" --sport ").append(port_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    // Agora regras com destino
+
+                    if (!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append("-s ").append(ip_src)
+                                .append(" --sport ").append(port_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-s ").append(ip_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append(" -s ").append(ip_src)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" -s ").append(ip_src)
+                                .append(" --sport ").append(port_src)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" -s ").append(ip_src)
+                                .append(" --sport ").append(port_src)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" -s ").append(ip_src)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+
+                    // Agora regras com destino
+
+                    if (ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --sport ").append(port_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --sport ").append(port_src)
+                                .append(" -d ").append(ip_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" -d ").append(ip_dst)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append(" -d ").append(ip_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    // Agora so com portas
+
+                    if (ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --sport ").append(port_src)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+                    if (ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")) {
+                        script.append("$IPTABLES -A firewall-wifi ")
+                                .append("-p tcp ")
+                                .append(" --sport ").append(port_src)
+                                .append(" --dport ").append(port_dst)
+                                .append(" -j ACCEPT || exit\n");
+                    }
+
+
+                }
+            }
+     }
 
         /**
          * Purge and re-add all rules (internal implementation).
@@ -183,352 +528,30 @@ public final class Firewall {
          * @param flag_all deny all traffic if true
          * @param showErrors indicates if errors should be alerted
          */
-        public static boolean applyIptablesRulesImpl(Context ctx, String ip_src, String ip_dst, String port_src, String port_dst
-                ,boolean flag_all, boolean fw_mode, boolean showErrors) {
+        public boolean applyIptablesRulesImpl(Context ctx, String ip_src, String ip_dst, String port_src, String port_dst
+                , boolean flag_all, boolean fw_mode, boolean showErrors) {
             if (ctx == null) {
                 return false;
             }
             assertBinaries(ctx, showErrors);
-            final String ITFS_WIFI[] = {"tiwlan+", "wlan+", "eth+", "ra+"};
             final boolean whitelist = fw_mode;
             final boolean logenabled = true;
             final String customScript = "";
 
-            final StringBuilder script = new StringBuilder();
+            if (ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")) {
+                Toast.makeText(ctx, "Preencha uma das opções!", Toast.LENGTH_LONG).show();
+                return false;
+            }
+
+
             try {
                 int code;
-                script.append(scriptHeader(ctx));
-                script.append("" +
-                        "$IPTABLES --version || exit 1\n" +
-                        "# Create the firewall chains if necessary\n" +
-                        "$IPTABLES -L firewall >/dev/null 2>/dev/null || $IPTABLES --new firewall || exit 2\n" +
-                        "$IPTABLES -L firewall-wifi >/dev/null 2>/dev/null || $IPTABLES --new firewall-wifi || exit 3\n" +
-                        "$IPTABLES -L firewall-reject >/dev/null 2>/dev/null || $IPTABLES --new firewall-reject || exit 4\n" +
-                        "# Add firewall chain to FORWARD chain if necessary\n" +
-                        "$IPTABLES -L FORWARD | $GREP -q firewall || $IPTABLES -A FORWARD -j firewall || exit 5\n" +
-                        "# Flush existing rules\n" +
-                        //"$IPTABLES -F firewall || exit 6\n" +
-                        //"$IPTABLES -F firewall-wifi || exit 7\n" +
-                        //"$IPTABLES -F firewall-reject || exit 8\n" +
-                        "");
-                // Check if logging is enabled
-                if (logenabled) {
-                    script.append("" +
-                            "# Create the log and reject rules (ignore errors on the LOG target just in case it is not available)\n" +
-                            "$IPTABLES -A firewall-reject -j LOG --log-prefix \"[firewall] \"\n" +
-                            "$IPTABLES -A firewall-reject -j REJECT || exit 9\n" +
-                            "");
+                if (flag_header){
+                    this.scriptHeader(ctx,logenabled,whitelist,customScript,flag_header);
                 } else {
-                    script.append("" +
-                            "# Create the reject rule (log disabled)\n" +
-                            "$IPTABLES -A firewall-reject -j REJECT || exit 10\n" +
-                            "");
+                    this.scriptHeader(ctx,logenabled,whitelist,customScript,false);
                 }
-                if (customScript.length() > 0) {
-                    script.append("\n# BEGIN OF CUSTOM SCRIPT (user-defined)\n");
-                    script.append(customScript);
-                    script.append("\n# END OF CUSTOM SCRIPT (user-defined)\n\n");
-                }
-                if (whitelist && logenabled) {
-                    script.append("# Allow DNS lookups on white-list for a better logging (ignore errors)\n");
-                    script.append("$IPTABLES -A firewall -p udp --dport 53 -j RETURN\n");
-                }
-                script.append("# Main rules (per interface)\n");
-
-                for (final String itf : ITFS_WIFI) {
-                    script.append("$IPTABLES -A firewall -i ").append(itf).append(" -j firewall-wifi || exit\n");
-                }
-
-                script.append("# Filtering rules\n");
-
-                if (whitelist) {
-
-                    if(flag_all) {
-                        /* block any traffic for this ip source */
-                        if ((!ip_src.trim().equals("")) && (ip_dst.trim().equals(""))) {
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-s ").append(ip_src + " -j DROP || exit\n");
-                        }
-
-                        /* block any traffic for this ip dest */
-                        if ((ip_src.trim().equals("")) && (!ip_dst.trim().equals(""))) {
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-s ").append(ip_dst + " -j DROP || exit\n");
-                        }
-                    } else { // Casos de aplicacao de regras no iptables
-
-                        // Regra cheia
-
-                        if(!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append("-s ").append(ip_src)
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        // Agora regras com destino
-
-                        if(!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append("-s ").append(ip_src)
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-s ").append(ip_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append(" -s ").append(ip_src)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" -s ").append(ip_src)
-                                    .append(" --sport ").append(port_src)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" -s ").append(ip_src)
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" -s ").append(ip_src)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-
-                        // Agora regras com destino
-
-                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        // Agora so com portas
-
-                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --sport ").append(port_src)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j DROP || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
-                            Toast.makeText(ctx,"Preencha uma das opções!", Toast.LENGTH_LONG).show();
-                            return false;
-                        }
-
-                    }
-
-                } else {
-
-                    if(flag_all) {
-                        /* block any traffic for this ip source */
-                        if ((!ip_src.trim().equals("")) && (ip_dst.trim().equals(""))) {
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-s ").append(ip_src + " -j ACCEPT || exit\n");
-                        }
-
-                        /* block any traffic for this ip dest */
-                        if ((ip_src.trim().equals("")) && (!ip_dst.trim().equals(""))) {
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-s ").append(ip_dst + " -j ACCEPT || exit\n");
-                        }
-                    } else { // Tornando o firewall em blacklist
-
-                        script.append("$IPTABLES -P INPUT DROP");
-                        script.append("$IPTABLES -P FORWARD DROP");
-                        script.append("$IPTABLES -P OUTPUT DROP");
-
-                        // Regra cheia
-
-                        if(!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append("-s ").append(ip_src)
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        // Agora regras com destino
-
-                        if(!ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append("-s ").append(ip_src)
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-s ").append(ip_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append(" -s ").append(ip_src)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" -s ").append(ip_src)
-                                    .append(" --sport ").append(port_src)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" -s ").append(ip_src)
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(!ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" -s ").append(ip_src)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-
-                        // Agora regras com destino
-
-                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && !ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append(" -d ").append(ip_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        // Agora so com portas
-
-                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && !port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --sport ").append(port_src)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && !port_src.trim().equals("") && port_dst.trim().equals("")){
-                            script.append("$IPTABLES -A firewall-wifi ")
-                                    .append("-p tcp ")
-                                    .append(" --sport ").append(port_src)
-                                    .append(" --dport ").append(port_dst)
-                                    .append(" -j ACCEPT || exit\n");
-                        }
-
-                        if(ip_src.trim().equals("") && ip_dst.trim().equals("") && port_src.trim().equals("") && port_dst.trim().equals("")){
-                            Toast.makeText(ctx,"Preencha uma das opções!", Toast.LENGTH_LONG).show();
-                            return false;
-                        }
-                    }
-
-                }
+                this.setCustomRules(ctx, whitelist,ip_src, ip_dst, port_src, port_dst, flag_all);
                 final StringBuilder res = new StringBuilder();
                 code = runScriptAsRoot(ctx, script.toString(), res);
                 if (showErrors && code != 0) {
@@ -540,6 +563,7 @@ public final class Firewall {
                     }
                     alert(ctx, "Error applying iptables rules. Exit code: " + code + "\n\n" + msg.trim());
                 } else {
+                    script.setLength(0);
                     return true;
                 }
             } catch (Exception e) {
@@ -554,20 +578,24 @@ public final class Firewall {
          * @param showErrors indicates if errors should be alerted
          * @return true if the rules were purged
          */
-        public static boolean purgeIptables(Context ctx, boolean showErrors) {
+        public boolean purgeIptables(Context ctx, boolean showErrors, boolean all) {
             final StringBuilder res = new StringBuilder();
             try {
                 assertBinaries(ctx, showErrors);
                 // Custom "shutdown" script
-                final String customScript = ctx.getSharedPreferences(Firewall.PREFS_NAME, 0).getString(Firewall.PREF_CUSTOMSCRIPT2, "");
-                final StringBuilder script = new StringBuilder();
-                script.append(scriptHeader(ctx));
-                script.append("" +
-                        "$IPTABLES -D FORWARD -j firewall\n" +
-                        "$IPTABLES -F firewall\n" +
-                        "$IPTABLES -F firewall-reject\n" +
-                        "$IPTABLES -F firewall-wifi\n" +
-                        "");
+                final String customScript = "";
+                this.scriptHeader(ctx,true,true,customScript,false);
+                if (all){
+                    script.append("" +
+                            "$IPTABLES -D FORWARD -j firewall\n" +
+                            "$IPTABLES -F firewall\n" +
+                            "$IPTABLES -F firewall-reject\n" +
+                            "$IPTABLES -F firewall-wifi\n" +
+                            "");
+                } else {
+                    script.append("$IPTABLES -F firewall-wifi\n");
+                }
+
                 if (customScript.length() > 0) {
                     script.append("\n# BEGIN OF CUSTOM SCRIPT (user-defined)\n");
                     script.append(customScript);
@@ -578,6 +606,7 @@ public final class Firewall {
                     if (showErrors) alert(ctx, "Error purging iptables. exit code: " + code + "\n" + res);
                     return false;
                 }
+                script.setLength(0);
                 return true;
             } catch (Exception e) {
                 if (showErrors) alert(ctx, "Error purging iptables: " + e);
@@ -589,12 +618,13 @@ public final class Firewall {
          * Display iptables rules output
          * @param ctx application context
          */
-        public static void showIptablesRules(Context ctx) {
+        public void showIptablesRules(Context ctx) {
             try {
                 final StringBuilder res = new StringBuilder();
-                runScriptAsRoot(ctx, scriptHeader(ctx) +
-                        "$ECHO $IPTABLES\n" +
-                        "$IPTABLES -L -v -n\n", res);
+                this.scriptHeader(ctx,true,true,"",false);
+                script.append( "$ECHO $IPTABLES\n" +
+                               "$IPTABLES -L -v -n\n");
+                runScriptAsRoot(ctx, script.toString(), res);
                 alert(ctx, res);
             } catch (Exception e) {
                 alert(ctx, "error: " + e);
@@ -626,11 +656,12 @@ public final class Firewall {
          * @param ctx application context
          */
 
-        public static void showLog(Context ctx) {
+        public void showLog(Context ctx) {
             try {
                 StringBuilder res = new StringBuilder();
-                int code = runScriptAsRoot(ctx, scriptHeader(ctx) +
-                        "dmesg | $GREP firewall\n", res);
+                this.scriptHeader(ctx,true,true,"",false);
+                script.append("dmesg | $GREP firewall\n");
+                int code = runScriptAsRoot(ctx,script.toString(), res);
                 if (code != 0) {
                     if (res.length() == 0) {
                         res.append("Log is empty");

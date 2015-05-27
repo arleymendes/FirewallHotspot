@@ -4,5 +4,5 @@
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Exit</string>
     <string name="emptyValue" />
-    <string name="toast_bin_installed"></string>
+    <string name="toast_bin_installed">Processando...</string>
 </resources>

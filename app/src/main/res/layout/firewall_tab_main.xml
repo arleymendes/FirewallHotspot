@@ -177,6 +177,15 @@
                         android:onClick="onClickShowRules"
                         android:layout_gravity="center_horizontal"
                         android:textStyle="bold" />
+
+                    <Button
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Purge wifi rules"
+                        android:id="@+id/TFBtnPurgeWifiRules"
+                        android:textStyle="bold"
+                        android:onClick="onClickPurgeWifiRules"
+                        android:layout_gravity="center_horizontal" />
                 </LinearLayout>
 
                 <LinearLayout

@@ -38,13 +38,14 @@ public class MainActivity extends ActionBarActivity {
     private CheckBox chk;
     private EditText ssid;
     private EditText presharedkey;
+    private Map<String, String> datum;
     private ArrayList<String[]> devices;
-    //private ArrayList<ClientScanResult> clients_antigo;
     private final Handler h = new Handler();
     private final int delay = 3000; //milliseconds
     private ListView listview;
     private WifiManager wifimanager;
     private Method[] methods;
+    private Firewall fw;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,7 +59,7 @@ public class MainActivity extends ActionBarActivity {
         tg1 = (ToggleButton)findViewById(R.id.TFButton);
         textView1 = (TextView)findViewById(R.id.TFStatusText);
         devices = new ArrayList<String[]>();
-        //clients_antigo = new ArrayList<ClientScanResult>();
+        fw = new Firewall();
 
         tb = (TabHost)findViewById(R.id.tabHost);
 
@@ -85,13 +86,11 @@ public class MainActivity extends ActionBarActivity {
             @Override
             public void onItemClick(AdapterView<?> arg0, View arg1,
                                     int position, long arg3) {
-                // TODO Auto-generated method stub
-                int itemPosition     = position;
 
                 // ListView Clicked item value
                 int i = 0;
                 for (String[]temp: devices){
-                    if (i == itemPosition){
+                    if (i == position){
                         // Show Alert
                         Toast.makeText(getApplicationContext(),
                                 "DEVICE: " + temp[0] + "\n" + "MAC: " + temp[1], Toast.LENGTH_LONG)
@@ -100,6 +99,7 @@ public class MainActivity extends ActionBarActivity {
                     }
                     i++;
                 }
+                //devices.clear();
             }
         });
 
@@ -109,7 +109,8 @@ public class MainActivity extends ActionBarActivity {
             tg1.setChecked(true);
             this.displayCurrentWifiConfig();
         }
-        scan();
+
+        this.updateStateWifiClients();
     }
 
 
@@ -129,7 +130,7 @@ public class MainActivity extends ActionBarActivity {
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
-            Firewall.purgeIptables(MainActivity.this,true);
+            fw.purgeIptables(MainActivity.this,true,true);
             MainActivity.this.finish();
             return true;
         }
@@ -148,8 +149,9 @@ public class MainActivity extends ActionBarActivity {
                 if (!clients.isEmpty()){
 
                     List<Map<String, String>> data = new ArrayList<Map<String, String>>();
+                    Map<String, String> datum = new HashMap<String, String>(2);
                     for (ClientScanResult clientScanResult : clients) {
-                        Map<String, String> datum = new HashMap<String, String>(2);
+
                         datum.put("IPADDR", "IP: " + clientScanResult.getIpAddr());
                         datum.put("CONNECT", "Status: " + (clientScanResult.isReachable()?"online":"offline"));
                         data.add(datum);
@@ -167,6 +169,8 @@ public class MainActivity extends ActionBarActivity {
                         tmp[1] = clientScanResult.getHWAddr();
                         devices.add(tmp);
                     }
+                    data.clear();
+                    datum.clear();
                     //clients_antigo = clients;
 
                 }else{
@@ -289,9 +293,9 @@ public class MainActivity extends ActionBarActivity {
         }
     }
 
-    public void onClickFwApply(View fw){
+    public void onClickFwApply(View fwapply){
 
-        if (fw.getId() == R.id.TFButtonFw){
+        if (fwapply.getId() == R.id.TFButtonFw){
 
             EditText origem = (EditText)findViewById(R.id.TFFwSrc);
             EditText prtorigem = (EditText)findViewById(R.id.TFFwPtSrc);
@@ -305,7 +309,12 @@ public class MainActivity extends ActionBarActivity {
             String prtdst = prtdestino.getText().toString();
             Boolean deny = denyall.isChecked();
 
-            if(Firewall.applyIptablesRulesImpl(MainActivity.this,src,dst,prtsrc,prtdst,deny,true,true)){
+            if(fw.applyIptablesRulesImpl(MainActivity.this,src,dst,prtsrc,prtdst,deny,true,true)){
+                origem.setText("");
+                prtorigem.setText("");
+                destino.setText("");
+                prtdestino.setText("");
+                denyall.setChecked(false);
                 Toast.makeText(MainActivity.this, "Regra aplicada com sucesso", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(MainActivity.this, "Falha na aplicação da regra", Toast.LENGTH_SHORT).show();
@@ -317,7 +326,15 @@ public class MainActivity extends ActionBarActivity {
 
     public void onClickShowRules(View rules){
         if(rules.getId() == R.id.TFBtnShowRules){
-            Firewall.showIptablesRules(MainActivity.this);
+            fw.showIptablesRules(MainActivity.this);
+        }
+    }
+
+    public void onClickPurgeWifiRules(View purge){
+        if (purge.getId() == R.id.TFBtnPurgeWifiRules){
+            if(fw.purgeIptables(MainActivity.this,true,false)){
+                Toast.makeText(MainActivity.this, "Rules Wifi deletadas", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 
